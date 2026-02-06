@@ -114,47 +114,70 @@ recent_test_mixed <- pengs_yearly %>%
 print(recent_test_mixed, n = Inf)
 
 ### Visualization
-# 1. Calculate adjusted means for all groups using your nested model results
-# (Assuming your nested list 'recent_test_mixed' still has the 'model' column)
+# use emmeans to estimate the marginal means, emmeans looks at the model and says, "If every site was represented equally, what would the average count look like?"
 plot_trends <- recent_test_mixed %>%
   mutate(
     em_df = map(model, ~as.data.frame(emmeans(.x, "period", type = "response")))
   ) %>%
   unnest(em_df)
-# Prepare the labels and significance markers
-selected_region <- 48.1
-plot_data_final <- plot_trends %>%
-  filter(cammlr_region == selected_region) %>%
-  mutate(
-    # Create significance label
-    sig_label = ifelse(significant, paste0(round(pct_change, 1), "% **"), 
-                       paste0(round(pct_change, 1), "%")),
-    # Order periods correctly on X-axis
-    period = factor(period, levels = c("historical", "recent"))
-  )
 
-ggplot(plot_data_final, aes(x = period, y = response, group = interaction(species, count_type))) +
-  geom_line(aes(color = species), linewidth = 2, alpha = 0.8) +
-  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1, color = "gray30") +
-  geom_point(aes(color = species), size = 5) +
-  geom_text(data = filter(plot_data_final, period == "recent"),
-            aes(label = sig_label), 
-            hjust = -0.2, vjust = 0.5, size = 5, fontface = "bold") +
-  scale_x_discrete(labels = c(paste(sixyrsago, "-", threeyrsago), paste(threeyrsago, "-", latest))) +
-  facet_grid(count_type ~ species, scales = "free_y") +
-  theme_minimal(base_size = 16) + 
-  theme(
-    strip.text = element_text(face = "bold", size = 18),
-    axis.title = element_text(face = "bold"),
-    panel.spacing = unit(2, "lines"),
-    legend.position = "none",
-    plot.title = element_text(size = 22, face = "bold"),
-    plot.subtitle = element_text(size = 14, color = "gray40")
-  ) +
-  labs(
-    title = paste0("Penguin Population Trends: Region ", selected_region),
-    subtitle = "Model-adjusted counts comparing last 10yrs vs last 3yrs. '**' denotes p < 0.05",
-    y = "Estimated Mean Count (Mixed Model)",
-    x = ""
-  ) +
-  expand_limits(x = 2.5) # Make room for the text labels
+# 1. Create a vector of unique regions
+region_list <- unique(plot_trends$cammlr_region)
+
+# 2. Initialize an empty list to store the plots
+all_plots <- list()
+
+# 3. Loop: Build and store
+for (selected_region in region_list) {
+  
+  # Filter data for this region
+  plot_data_final <- plot_trends %>%
+    filter(cammlr_region == selected_region) %>%
+    mutate(
+      sig_label = ifelse(significant, paste0(round(pct_change, 1), "% **"), 
+                         paste0(round(pct_change, 1), "%")),
+      period = factor(period, levels = c("historical", "recent"))
+    )
+  
+  # Generate the plot
+  p <- ggplot(plot_data_final, aes(x = period, y = response, group = interaction(species, count_type))) +
+    geom_line(aes(color = species), linewidth = 2, alpha = 0.8) +
+    geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1, color = "gray30") +
+    geom_point(aes(color = species), size = 5) +
+    geom_text(data = filter(plot_data_final, period == "recent"),
+              aes(label = sig_label), 
+              hjust = -0.2, vjust = 0.5, size = 5, fontface = "bold") +
+    scale_x_discrete(labels = c(paste(sixyrsago, "-", threeyrsago), 
+                                paste(threeyrsago, "-", latest))) +
+    facet_grid(count_type ~ species, scales = "free_y") +
+    theme_minimal(base_size = 16) + 
+    theme(
+      strip.text = element_text(face = "bold", size = 18),
+      axis.title = element_text(face = "bold"),
+      panel.spacing = unit(2, "lines"),
+      legend.position = "none",
+      plot.title = element_text(size = 22, face = "bold"),
+      plot.subtitle = element_text(size = 14, color = "gray40")
+    ) +
+    labs(
+      title = paste0("Penguin Population Trends: Region ", selected_region),
+      subtitle = "Model-adjusted counts comparing last 10yrs vs last 3yrs. '**' denotes p < 0.05",
+      y = "Estimated Mean Count (Mixed Model)",
+      x = ""
+    ) +
+    expand_limits(x = 2.6)
+  
+  # Store the plot in the list using the region name as the key
+  all_plots[[as.character(selected_region)]] <- p
+}
+
+# 4. Save: iterate through the list and save
+for (region_name in names(all_plots)) {
+  file_name <- paste0("penguins_recent_change_", region_name, ".png")
+  
+  ggsave(filename = file_name, 
+         plot = all_plots[[region_name]], 
+         width = 14, height = 10, dpi = 300)
+  
+  message("Saved: ", file_name)
+}
