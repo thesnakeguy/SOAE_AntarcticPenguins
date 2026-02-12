@@ -1,5 +1,5 @@
 ######################################################################################################
-## This script draws penguin data from https://ipt.biodiversity.aq/resource?r=mapppd_count_data and 
+## This script draws penguin data from https://ipt.biodiversity.aq/resource?r=mapppd_count_data and
 ## performs data visualization as well as statitical tests for (recent) population trends
 ######################################################################################################
 
@@ -8,6 +8,7 @@ library(ggplot2)
 library(tidyverse)
 library(mgcv)
 library(emmeans)
+library(lme4)
 
 ###################################
 ### Preparing data for analysis
@@ -15,11 +16,9 @@ library(emmeans)
 
 # Draw data in
 if (!file.exists("MAPPPD_AllCounts.csv")) {
-  download.file(
-    "https://www.penguinmap.com/mapppd/DownloadAll",
-    "MAPPPD_AllCounts.csv",
-    mode = "wb"
-  )
+  download.file("https://www.penguinmap.com/mapppd/DownloadAll",
+                "MAPPPD_AllCounts.csv",
+                mode = "wb")
 }
 
 pengs_raw <- readr::read_csv("MAPPPD_AllCounts.csv", show_col_types = FALSE)
@@ -28,17 +27,14 @@ pengs_raw <- readr::read_csv("MAPPPD_AllCounts.csv", show_col_types = FALSE)
 pengs_clean <- pengs_raw %>%
   filter(
     cammlr_region %in% c("48.1", "88.1", "58.4.2"),
-    common_name %in% c("adelie penguin", "chinstrap penguin", "gentoo penguin"),
-    !is.na(penguin_count),
-    penguin_count > 0  
+    common_name %in% c("adelie penguin", "chinstrap penguin", "gentoo penguin"),!is.na(penguin_count),
+    penguin_count > 0
   ) %>%
-  mutate(
-    species = case_when(
-      str_detect(common_name, "adelie") ~ "Adelie",
-      str_detect(common_name, "chinstrap") ~ "Chinstrap",
-      str_detect(common_name, "gentoo") ~ "Gentoo"
-    )
-  )
+  mutate(species = case_when(
+    str_detect(common_name, "adelie") ~ "Adelie",
+    str_detect(common_name, "chinstrap") ~ "Chinstrap",
+    str_detect(common_name, "gentoo") ~ "Gentoo"
+  ))
 
 # Check what count types you're working with
 table(pengs_clean$count_type)
@@ -51,7 +47,8 @@ monitoring_summary <- pengs_clean %>%
     first_year = min(year),
     last_year = max(year),
     year_span = last_year - first_year + 1,
-    coverage = n_years / year_span,  # proportion of years monitored
+    coverage = n_years / year_span,
+    # proportion of years monitored
     .groups = "drop"
   ) %>%
   arrange(desc(n_years))
@@ -69,7 +66,7 @@ pengs_yearly <- pengs_clean %>%
   group_by(cammlr_region, site_name, site_id, species, year, count_type) %>%
   summarize(
     mean_count = mean(penguin_count, na.rm = TRUE),
-    max_count = max(penguin_count, na.rm = TRUE),  
+    max_count = max(penguin_count, na.rm = TRUE),
     n_obs = n(),
     .groups = "drop"
   )
@@ -93,16 +90,17 @@ recent_test_mixed <- pengs_yearly %>%
   nest() %>%
   mutate(
     # Negative binomial mixed model with site as random effect
-    model = map(data, ~glmer.nb(max_count ~ period + (1|site_id), data = .x)),
+    model = map(data, ~ glmer.nb(max_count ~ period + (1 |
+                                                         site_id), data = .x)),
     
     # Extract fixed effect for period
-    fixed_effects = map(model, ~summary(.x)$coefficients),
-    p_value = map_dbl(fixed_effects, ~.["periodrecent", "Pr(>|z|)"]),
-    coefficient = map_dbl(fixed_effects, ~.["periodrecent", "Estimate"]),
+    fixed_effects = map(model, ~ summary(.x)$coefficients),
+    p_value = map_dbl(fixed_effects, ~ .["periodrecent", "Pr(>|z|)"]),
+    coefficient = map_dbl(fixed_effects, ~ .["periodrecent", "Estimate"]),
     
-    n_sites = map_int(data, ~n_distinct(.x$site_id)),
-    n_obs_recent = map_dbl(data, ~sum(.x$period == "recent")),
-    n_obs_historical = map_dbl(data, ~sum(.x$period == "historical"))
+    n_sites = map_int(data, ~ n_distinct(.x$site_id)),
+    n_obs_recent = map_dbl(data, ~ sum(.x$period == "recent")),
+    n_obs_historical = map_dbl(data, ~ sum(.x$period == "historical"))
   ) %>%
   dplyr::select(-data, -fixed_effects) %>%
   mutate(
@@ -116,9 +114,7 @@ print(recent_test_mixed, n = Inf)
 ### Visualization
 # use emmeans to estimate the marginal means, emmeans looks at the model and says, "If every site was represented equally, what would the average count look like?"
 plot_trends <- recent_test_mixed %>%
-  mutate(
-    em_df = map(model, ~as.data.frame(emmeans(.x, "period", type = "response")))
-  ) %>%
+  mutate(em_df = map(model, ~ as.data.frame(emmeans(.x, "period", type = "response")))) %>%
   unnest(em_df)
 
 # 1. Create a vector of unique regions
@@ -129,28 +125,40 @@ all_plots <- list()
 
 # 3. Loop: Build and store
 for (selected_region in region_list) {
-  
   # Filter data for this region
   plot_data_final <- plot_trends %>%
     filter(cammlr_region == selected_region) %>%
     mutate(
-      sig_label = ifelse(significant, paste0(round(pct_change, 1), "% **"), 
-                         paste0(round(pct_change, 1), "%")),
+      sig_label = ifelse(significant, paste0(round(pct_change, 1), "% **"), paste0(round(pct_change, 1), "%")),
       period = factor(period, levels = c("historical", "recent"))
     )
   
   # Generate the plot
-  p <- ggplot(plot_data_final, aes(x = period, y = response, group = interaction(species, count_type))) +
+  p <- ggplot(plot_data_final,
+              aes(
+                x = period,
+                y = response,
+                group = interaction(species, count_type)
+              )) +
     geom_line(aes(color = species), linewidth = 2, alpha = 0.8) +
-    geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1, color = "gray30") +
+    geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL),
+                  width = 0.1,
+                  color = "gray30") +
     geom_point(aes(color = species), size = 5) +
-    geom_text(data = filter(plot_data_final, period == "recent"),
-              aes(label = sig_label), 
-              hjust = -0.2, vjust = 0.5, size = 5, fontface = "bold") +
-    scale_x_discrete(labels = c(paste(sixyrsago, "-", threeyrsago), 
-                                paste(threeyrsago, "-", latest))) +
+    geom_text(
+      data = filter(plot_data_final, period == "recent"),
+      aes(label = sig_label),
+      hjust = -0.2,
+      vjust = 0.5,
+      size = 5,
+      fontface = "bold"
+    ) +
+    scale_x_discrete(labels = c(
+      paste(sixyrsago, "-", threeyrsago),
+      paste(threeyrsago, "-", latest)
+    )) +
     facet_grid(count_type ~ species, scales = "free_y") +
-    theme_minimal(base_size = 16) + 
+    theme_minimal(base_size = 16) +
     theme(
       strip.text = element_text(face = "bold", size = 18),
       axis.title = element_text(face = "bold"),
@@ -161,7 +169,7 @@ for (selected_region in region_list) {
     ) +
     labs(
       title = paste0("Penguin Population Trends: Region ", selected_region),
-      subtitle = "Model-adjusted counts comparing last 10yrs vs last 3yrs. '**' denotes p < 0.05",
+      subtitle = "Model-adjusted counts comparing last 3yrs vs the 3yrs before that. '**' denotes p < 0.05",
       y = "Estimated Mean Count (Mixed Model)",
       x = ""
     ) +
@@ -175,9 +183,13 @@ for (selected_region in region_list) {
 for (region_name in names(all_plots)) {
   file_name <- paste0("penguins_recent_change_", region_name, ".png")
   
-  ggsave(filename = file_name, 
-         plot = all_plots[[region_name]], 
-         width = 14, height = 10, dpi = 300)
+  ggsave(
+    filename = file_name,
+    plot = all_plots[[region_name]],
+    width = 14,
+    height = 10,
+    dpi = 300
+  )
   
   message("Saved: ", file_name)
 }
