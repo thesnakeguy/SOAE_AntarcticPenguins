@@ -2,7 +2,7 @@
 
 ![CCAMLR](https://img.shields.io/badge/CCAMLR-State%20of%20the%20Antarctic%20Environment-teal) ![R](https://img.shields.io/badge/language-R-blue)
 
-R script for monitoring and visualising population trends in Antarctic pygoscelid penguins using count data from [MAPPPD](https://www.penguinmap.com/mapppd/). Developed to support State of the Antarctic Environment (SAE) reporting within the [CCAMLR](https://www.ccamlr.org) framework, where penguin trends serve as indicators of Southern Ocean ecosystem health.
+R script for monitoring and visualising population trends in Antarctic pygoscelid penguins using count data from [MAPPPD](https://www.penguinmap.com/mapppd/). Developed to support State of the Antarctic Environment (SOAE) reporting within the [CCAMLR](https://www.ccamlr.org) framework, where penguin trends serve as indicators of Southern Ocean ecosystem health.
 
 ## Species and regions
 
