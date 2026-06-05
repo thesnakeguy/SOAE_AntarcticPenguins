@@ -77,13 +77,13 @@ pengs_yearly <- pengs_clean %>%
 
 ### Fitting a negative binomial statistical model
 
-# Statistical test (last 6-3 yrs vs last 3 yrs)
+# Statistical test (last 10-3 yrs vs last 3 yrs)
 latest <- max(pengs_yearly$year)
-sixyrsago <- as.numeric(latest - 6)
+tenyrsago <- as.numeric(latest - 10)
 threeyrsago <- as.numeric(latest - 3)
 
 recent_test_mixed <- pengs_yearly %>%
-  filter(year >= sixyrsago) %>%
+  filter(year >= tenyrsago) %>%
   mutate(period = ifelse(year >= threeyrsago, "recent", "historical")) %>%
   group_by(cammlr_region, species, count_type) %>%
   filter(n_distinct(period) == 2) %>%
@@ -154,7 +154,7 @@ for (selected_region in region_list) {
       fontface = "bold"
     ) +
     scale_x_discrete(labels = c(
-      paste(sixyrsago, "-", threeyrsago),
+      paste(tenyrsago, "-", threeyrsago),
       paste(threeyrsago, "-", latest)
     )) +
     facet_grid(count_type ~ species, scales = "free_y") +
@@ -169,7 +169,7 @@ for (selected_region in region_list) {
     ) +
     labs(
       title = paste0("Penguin Population Trends: Region ", selected_region),
-      subtitle = "Model-adjusted counts comparing last 3yrs vs the 3yrs before that. '**' denotes p < 0.05",
+      subtitle = "Model-adjusted counts comparing the 3 yrs vs the 7 yrs before that. '**' denotes p < 0.05",
       y = "Estimated Mean Count (Mixed Model)",
       x = ""
     ) +
@@ -181,7 +181,7 @@ for (selected_region in region_list) {
 
 # 4. Save: iterate through the list and save
 for (region_name in names(all_plots)) {
-  file_name <- paste0("penguins_recent_change_", region_name, ".png")
+  file_name <- paste0("penguins_recent_change_", region_name, ".svg")
   
   ggsave(
     filename = file_name,
