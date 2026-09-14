@@ -90,8 +90,7 @@ recent_test_mixed <- pengs_yearly %>%
   nest() %>%
   mutate(
     # Negative binomial mixed model with site as random effect
-    model = map(data, ~ glmer.nb(max_count ~ period + (1 |
-                                                         site_id), data = .x)),
+    model = map(data, ~ glmer.nb(max_count ~ period + (1 | site_id), data = .x)),
     
     # Extract fixed effect for period
     fixed_effects = map(model, ~ summary(.x)$coefficients),
